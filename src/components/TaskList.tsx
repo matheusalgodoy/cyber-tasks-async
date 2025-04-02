@@ -1,140 +1,129 @@
-import { useState } from "react";
-import TaskItem, { Task } from "./TaskItem";
-import AddTaskForm from "./AddTaskForm";
-import { useToast } from "@/hooks/use-toast";
-import { Plus, CircleDot, CheckCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Task, TaskItem } from "@/components/TaskItem";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { SearchIcon } from "lucide-react";
 
 interface TaskListProps {
   tasks: Task[];
-  onAddTask: (task: Omit<Task, "id">) => void;
   onUpdateTask: (task: Task) => void;
   onToggleComplete: (id: string) => void;
   onDeleteTask: (id: string) => void;
 }
 
-const TaskList = ({
+export function TaskList({
   tasks,
-  onAddTask,
   onUpdateTask,
   onToggleComplete,
   onDeleteTask
-}: TaskListProps) => {
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const { toast } = useToast();
+}: TaskListProps) {
+  const [filter, setFilter] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [filteredTasks, setFilteredTasks] = useState<Task[]>(tasks);
   
-  const handleEdit = (task: Task) => {
-    setEditingTask(task);
-    setShowAddForm(true);
-  };
-
-  const handleDelete = (id: string) => {
-    onDeleteTask(id);
-    toast({
-      title: "Tarefa excluída",
-      description: "Sua tarefa foi excluída com sucesso",
-      variant: "destructive"
+  // Aplicar filtragem de tarefas
+  useEffect(() => {
+    let result = [...tasks];
+    
+    // Aplicar filtro de pesquisa
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(task => 
+        task.title.toLowerCase().includes(term)
+      );
+    }
+    
+    // Aplicar filtro de status
+    if (filter === "active") {
+      result = result.filter(task => !task.completed);
+    } else if (filter === "completed") {
+      result = result.filter(task => task.completed);
+    }
+    
+    // Ordenar por data
+    result.sort((a, b) => {
+      // Tarefas com prazo aparecem primeiro
+      const aHasDue = Boolean(a.dueDate);
+      const bHasDue = Boolean(b.dueDate);
+      
+      if (aHasDue && !bHasDue) return -1;
+      if (!aHasDue && bHasDue) return 1;
+      
+      // Ordenar por data de vencimento
+      if (a.dueDate && b.dueDate) {
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      }
+      
+      // Por fim, ordenar por data de criação (mais recentes primeiro)
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
-  };
-
-  const handleUpdateTask = (task: Task) => {
-    onUpdateTask(task);
-    setEditingTask(null);
-    setShowAddForm(false);
-    toast({
-      title: "Tarefa atualizada",
-      description: "Sua tarefa foi atualizada com sucesso"
-    });
-  };
-
-  const handleAddTask = (task: Omit<Task, "id">) => {
-    onAddTask(task);
-    setShowAddForm(false);
-    toast({
-      title: "Tarefa adicionada",
-      description: "Sua nova tarefa foi adicionada com sucesso"
-    });
-  };
-
-  const pendingTasks = tasks.filter(task => !task.completed);
-  const completedTasks = tasks.filter(task => task.completed);
+    
+    setFilteredTasks(result);
+  }, [tasks, filter, searchTerm]);
   
   return (
-    <div>
-      {!showAddForm ? (
-        <div className="mb-10">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold uppercase text-foreground border-b-2 border-primary pb-1">
-              TAREFAS
-            </h2>
-            <button 
-              onClick={() => setShowAddForm(true)}
-              className="bg-primary text-primary-foreground px-4 py-2 rounded inline-flex items-center gap-2 font-medium"
-            >
-              <Plus size={18} />
-              Nova Tarefa
-            </button>
-          </div>
-          
-          <div className="space-y-6">
-            {tasks.length === 0 ? (
-              <div className="cyber-box text-center py-8">
-                <p className="text-muted-foreground">Nenhuma tarefa ainda. Adicione uma para começar!</p>
-              </div>
-            ) : (
-              <>
-                {pendingTasks.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <CircleDot size={16} className="text-foreground" />
-                      <h2 className="text-md font-bold uppercase text-foreground">PENDENTES ({pendingTasks.length})</h2>
-                    </div>
-                    {pendingTasks.map(task => (
-                      <TaskItem
-                        key={task.id}
-                        task={task}
-                        onToggleComplete={onToggleComplete}
-                        onEdit={handleEdit}
-                        onDelete={handleDelete}
-                      />
-                    ))}
-                  </div>
-                )}
-                
-                {completedTasks.length > 0 && (
-                  <div className="mt-6">
-                    <div className="flex items-center gap-2 mb-3">
-                      <CircleDot size={16} className="text-accent" />
-                      <h2 className="text-md font-bold uppercase text-foreground">CONCLUÍDAS ({completedTasks.length})</h2>
-                    </div>
-                    {completedTasks.map(task => (
-                      <TaskItem
-                        key={task.id}
-                        task={task}
-                        onToggleComplete={onToggleComplete}
-                        onEdit={handleEdit}
-                        onDelete={handleDelete}
-                      />
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+    <div className="space-y-4">
+      <div className="flex items-center space-x-2">
+        <div className="relative flex-1">
+          <SearchIcon className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Pesquisar tarefas..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-8"
+          />
         </div>
-      ) : (
-        <AddTaskForm 
-          onAddTask={handleAddTask} 
-          onUpdateTask={handleUpdateTask}
-          initialTask={editingTask || undefined}
-          onCancel={() => {
-            setEditingTask(null);
-            setShowAddForm(false);
-          }}
-        />
-      )}
+      </div>
+      
+      <Tabs defaultValue="all" onValueChange={setFilter}>
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="all">Todas</TabsTrigger>
+          <TabsTrigger value="active">Pendentes</TabsTrigger>
+          <TabsTrigger value="completed">Concluídas</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="all" className="mt-4">
+          {renderTaskList(filteredTasks)}
+        </TabsContent>
+        
+        <TabsContent value="active" className="mt-4">
+          {renderTaskList(filteredTasks)}
+        </TabsContent>
+        
+        <TabsContent value="completed" className="mt-4">
+          {renderTaskList(filteredTasks)}
+        </TabsContent>
+      </Tabs>
     </div>
   );
-};
-
-export default TaskList;
+  
+  function renderTaskList(tasks: Task[]) {
+    if (tasks.length === 0) {
+      return (
+        <div className="text-center py-8 text-muted-foreground">
+          {searchTerm 
+            ? "Nenhuma tarefa corresponde à sua pesquisa"
+            : filter === "completed"
+              ? "Nenhuma tarefa concluída ainda"
+              : filter === "active"
+                ? "Nenhuma tarefa pendente"
+                : "Nenhuma tarefa adicionada ainda"}
+        </div>
+      );
+    }
+    
+    return (
+      <div className="space-y-2">
+        {tasks.map((task) => (
+          <TaskItem
+            key={task.id}
+            task={task}
+            onUpdate={onUpdateTask}
+            onToggleComplete={onToggleComplete}
+            onDelete={onDeleteTask}
+          />
+        ))}
+      </div>
+    );
+  }
+}

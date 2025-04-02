@@ -1,148 +1,174 @@
 import { useState } from "react";
-import { Trash, Edit, CheckCheck, Clock, Calendar, Bell } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import { Calendar, Clock, Trash, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 export interface Task {
   id: string;
   title: string;
-  description: string;
   completed: boolean;
-  createdAt?: string; // Add creation date
-  dueDate?: string; // Data de vencimento
-  dueTime?: string; // Hora de vencimento
-  reminder?: boolean; // Se deve mostrar lembrete
+  createdAt: string;
+  dueDate: string | null;
+  dueTime: string | null;
+  reminder: boolean;
 }
 
 interface TaskItemProps {
   task: Task;
+  onUpdate: (task: Task) => void;
   onToggleComplete: (id: string) => void;
-  onEdit: (task: Task) => void;
   onDelete: (id: string) => void;
 }
 
-const TaskItem = ({ task, onToggleComplete, onEdit, onDelete }: TaskItemProps) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  // Verifica se a tarefa está atrasada
+export function TaskItem({ task, onUpdate, onToggleComplete, onDelete }: TaskItemProps) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  
+  // Verificar se a tarefa está vencida
   const isOverdue = () => {
-    if (!task.dueDate) return false;
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    if (!task.dueDate || task.completed) return false;
     
     const dueDate = new Date(task.dueDate);
-    dueDate.setHours(0, 0, 0, 0);
-    
-    if (task.dueTime && dueDate.getTime() === today.getTime()) {
-      const now = new Date();
+    if (task.dueTime) {
       const [hours, minutes] = task.dueTime.split(':').map(Number);
-      const dueDateTime = new Date();
-      dueDateTime.setHours(hours, minutes, 0, 0);
-      return now > dueDateTime;
+      dueDate.setHours(hours, minutes, 0, 0);
+    } else {
+      dueDate.setHours(23, 59, 59, 999);
     }
     
-    return today > dueDate;
+    return dueDate < new Date();
   };
-
-  // Formata a data em formato legível
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return format(date, "d 'de' MMMM", { locale: ptBR });
+  
+  // Formatar data de criação
+  const formatCreatedDate = () => {
+    try {
+      return format(new Date(task.createdAt), "d 'de' MMMM", { locale: ptBR });
+    } catch (error) {
+      return "Data desconhecida";
+    }
   };
-
-  const overdueStatus = !task.completed && task.dueDate && isOverdue();
-
+  
+  // Formatar data de vencimento
+  const formatDueDate = () => {
+    if (!task.dueDate) return null;
+    
+    try {
+      return format(new Date(task.dueDate), "d 'de' MMMM", { locale: ptBR });
+    } catch (error) {
+      return "Data inválida";
+    }
+  };
+  
   return (
-    <div 
+    <Card 
       className={cn(
-        "cyber-box my-3 transition-all duration-300",
+        "transition-all",
         task.completed && "opacity-70",
-        overdueStatus && "border-destructive"
+        isOverdue() && "border-destructive"
       )}
     >
-      <div className="flex items-start gap-3">
-        <button
-          onClick={() => onToggleComplete(task.id)}
-          className={cn(
-            "mt-1 h-5 w-5 flex-shrink-0 flex items-center justify-center rounded border",
-            task.completed 
-              ? "bg-accent/20 border-accent/50 text-accent" 
-              : "bg-secondary border-border text-transparent hover:border-border/80"
-          )}
-        >
-          {task.completed && <CheckCheck size={14} className="animate-pulse-glow" />}
-        </button>
-        
-        <div className="flex-1">
-          <h3 
-            className={cn(
-              "text-lg font-medium cursor-pointer",
-              task.completed && "line-through text-muted-foreground",
-              !task.completed && "text-foreground hover:text-primary",
-              overdueStatus && "text-destructive"
-            )}
-            onClick={() => setIsExpanded(!isExpanded)}
-          >
-            {task.title}
-          </h3>
-          
-          {task.description && (
-            <p className="text-muted-foreground mt-1 text-sm">
-              {task.description}
-            </p>
-          )}
-          
-          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs">
-            {task.createdAt && (
-              <div className="flex items-center text-muted-foreground">
-                <Clock size={12} className="mr-1" />
-                Criado em {task.createdAt}
-              </div>
-            )}
+      <CardHeader className="p-4 pb-2">
+        <div className="flex items-start gap-2">
+          <Checkbox 
+            checked={task.completed}
+            onCheckedChange={() => onToggleComplete(task.id)}
+            className="mt-1"
+          />
+          <div className="flex-1">
+            <CardTitle className={cn(
+              "text-lg font-medium",
+              task.completed && "line-through text-muted-foreground"
+            )}>
+              {task.title}
+            </CardTitle>
             
+            <CardDescription className="flex items-center gap-1 mt-1 text-xs">
+              <Calendar className="h-3 w-3" />
+              Criada em {formatCreatedDate()}
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      
+      {(task.dueDate || task.reminder) && (
+        <CardContent className="p-4 pt-0">
+          <div className="flex flex-wrap gap-2 mt-2">
             {task.dueDate && (
-              <div 
-                className={cn(
-                  "flex items-center",
-                  overdueStatus ? "text-destructive" : "text-muted-foreground"
+              <Badge variant={isOverdue() ? "destructive" : "outline"} className="flex items-center gap-1">
+                {isOverdue() && <AlertCircle className="h-3 w-3" />}
+                <Calendar className="h-3 w-3" />
+                {formatDueDate()}
+                {task.dueTime && (
+                  <>
+                    <Clock className="h-3 w-3 ml-1" />
+                    {task.dueTime}
+                  </>
                 )}
-              >
-                <Calendar size={12} className="mr-1" />
-                Vence em {formatDate(task.dueDate)}
-                {task.dueTime && <> às {task.dueTime}</>}
-              </div>
+              </Badge>
             )}
             
             {task.reminder && (
-              <div className="flex items-center text-accent">
-                <Bell size={12} className="mr-1" />
-                Lembrete ativado
-              </div>
+              <Badge variant="secondary" className="bg-purple-500/20 text-purple-700 dark:text-purple-300">
+                Lembrete ativo
+              </Badge>
             )}
           </div>
+        </CardContent>
+      )}
+      
+      <CardFooter className="p-2 justify-end">
+        <div className="flex gap-2">
+          <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="icon" className="h-8 w-8">
+                <Trash className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Confirmar exclusão</DialogTitle>
+              </DialogHeader>
+              <p>
+                Tem certeza que deseja excluir a tarefa "{task.title}"? 
+                Esta ação não pode ser desfeita.
+              </p>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setConfirmDelete(false)}>
+                  Cancelar
+                </Button>
+                <Button 
+                  variant="destructive"
+                  onClick={() => {
+                    onDelete(task.id);
+                    setConfirmDelete(false);
+                  }}
+                >
+                  Excluir
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
-        
-        <div className="flex space-x-2">
-          <button 
-            onClick={() => onEdit(task)} 
-            className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Edit task"
-          >
-            <Edit size={18} />
-          </button>
-          <button 
-            onClick={() => onDelete(task.id)} 
-            className="p-1.5 rounded-md hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
-            aria-label="Delete task"
-          >
-            <Trash size={18} />
-          </button>
-        </div>
-      </div>
-    </div>
+      </CardFooter>
+    </Card>
   );
-};
-
-export default TaskItem;
+}

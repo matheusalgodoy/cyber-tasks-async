@@ -1,543 +1,279 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect, useCallback, memo } from "react";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
+import { 
+  Form, 
+  FormControl, 
+  FormDescription, 
+  FormField, 
+  FormItem, 
+  FormLabel,
+} from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
-import { Input } from "./ui/input";
-import { Settings, Bell, Volume2, Info } from "lucide-react";
 import { useReminders } from "@/hooks/use-reminders";
+import { useForm } from "react-hook-form";
+import { Task } from "@/components/TaskItem";
 
-interface SettingsDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+interface SettingsProps {
+  tasks: Task[];
 }
 
-export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
+function SettingsDialogComponent({ tasks }: SettingsProps) {
+  const [open, setOpen] = useState(false);
   const { toast } = useToast();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [advanceReminder, setAdvanceReminder] = useState(15);
-  const [permissionStatus, setPermissionStatus] = useState<string>("");
-  const [isIOS, setIsIOS] = useState(false);
-  const [testingNotification, setTestingNotification] = useState(false);
-
-  // Verificar se está rodando como PWA
-  const { isPwa } = useReminders([]);
-
-  // Detectar se é iOS
+  const { settings, updateSettings, isPwa, isIOS, showNotification } = useReminders(tasks);
+  
+  // Configurações de formulário - mantenha estável na montagem do componente
+  const form = useForm({
+    defaultValues: settings
+  });
+  
+  // Atualizar form quando as configurações mudarem significativamente
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const userAgent = window.navigator.userAgent.toLowerCase();
-      setIsIOS(/iphone|ipad|ipod/.test(userAgent));
+    if (form.getValues().notificationsEnabled !== settings.notificationsEnabled ||
+        form.getValues().soundEnabled !== settings.soundEnabled ||
+        form.getValues().advanceReminder !== settings.advanceReminder) {
+      form.reset(settings);
     }
-  }, []);
-
-  // Verificar a permissão atual de notificação
-  const checkNotificationPermission = () => {
-    if (typeof window === 'undefined' || !("Notification" in window)) {
-      setPermissionStatus("not-supported");
-      return "not-supported";
-    }
-    
-    const permission = Notification.permission;
-    console.log("Permissão atual:", permission);
-    setPermissionStatus(permission);
-    return permission;
-  };
-
-  // Solicitar permissão para notificações
-  const requestNotificationPermission = async () => {
-    console.log("Solicitando permissão para notificações...");
-    
-    // Se estiver em iOS, apenas ativar as notificações do app
-    // já que notificações nativas são limitadas no Safari iOS
-    if (isIOS) {
-      setNotificationsEnabled(true);
-      saveSettings(true, soundEnabled, advanceReminder);
+  }, [settings, form]);
+  
+  // Solicitar permissão para notificações - memoizar para evitar re-renders
+  const requestPermission = useCallback(async () => {
+    if (!("Notification" in window)) {
       toast({
-        title: "Notificações ativadas",
-        description: "Lembretes serão exibidos usando notificações internas.",
+        title: "Erro",
+        description: "Seu navegador não suporta notificações.",
+        variant: "destructive"
       });
-      return "granted";
+      return;
+    }
+    
+    if (Notification.permission === "granted") {
+      toast({
+        title: "Permissão já concedida",
+        description: "Você já permitiu as notificações para este site."
+      });
+      updateSettings({ notificationsEnabled: true });
+      return;
     }
     
     try {
-      if (typeof window !== 'undefined' && "Notification" in window) {
-        // No caso de já ter permissão, apenas ativar
-        if (Notification.permission === "granted") {
-          setNotificationsEnabled(true);
-          saveSettings(true, soundEnabled, advanceReminder);
-          toast({
-            title: "Notificações ativadas",
-            description: "Você receberá notificações de lembretes de tarefas.",
-          });
-          return "granted";
-        }
-        
-        // Solicitar permissão se ainda não decidiu
-        if (Notification.permission === "default") {
-          try {
-            const permission = await Notification.requestPermission();
-            console.log("Resultado da solicitação de permissão:", permission);
-            setPermissionStatus(permission);
-            
-            if (permission === "granted") {
-              setNotificationsEnabled(true);
-              saveSettings(true, soundEnabled, advanceReminder);
-              toast({
-                title: "Notificações ativadas",
-                description: "Você receberá notificações de lembretes de tarefas.",
-              });
-            } else {
-              setNotificationsEnabled(false);
-              saveSettings(false, soundEnabled, advanceReminder);
-              toast({
-                title: "Permissão de notificação negada",
-                description: "Permita notificações nas configurações do navegador para receber lembretes.",
-                variant: "destructive",
-              });
-            }
-            
-            return permission;
-          } catch (error) {
-            console.error("Erro ao solicitar permissão:", error);
-            toast({
-              title: "Erro",
-              description: "Não foi possível solicitar permissão para notificações.",
-              variant: "destructive",
-            });
-            return "denied";
-          }
-        }
-        
-        // Se permissão já negada anteriormente
-        if (Notification.permission === "denied") {
-          toast({
-            title: "Permissão bloqueada",
-            description: "As notificações estão bloqueadas. Verifique as configurações do seu navegador.",
-            variant: "destructive",
-          });
-          return "denied";
-        }
-      } else {
-        // Navegador não suporta notificações
+      const permission = await Notification.requestPermission();
+      if (permission === "granted") {
         toast({
-          title: "Não suportado",
-          description: "Seu navegador não suporta notificações nativas. Usaremos notificações internas.",
+          title: "Permissão concedida",
+          description: "Agora você receberá notificações para suas tarefas."
         });
-        // Mesmo assim, ativamos as notificações para usar o fallback
-        setNotificationsEnabled(true);
-        saveSettings(true, soundEnabled, advanceReminder);
-        return "not-supported";
-      }
-    } catch (error) {
-      console.error("Erro ao gerenciar notificações:", error);
-      toast({
-        title: "Erro",
-        description: "Ocorreu um erro ao ativar as notificações.",
-        variant: "destructive",
-      });
-    }
-    
-    return Notification.permission || "denied";
-  };
-
-  // Alternar notificações com tratamento adequado
-  const handleNotificationToggle = (checked: boolean) => {
-    console.log("Alternar notificações:", checked);
-    
-    if (checked) {
-      // Se está ativando, solicitar permissão
-      requestNotificationPermission();
-    } else {
-      // Se está desativando, apenas desligar
-      setNotificationsEnabled(false);
-      saveSettings(false, soundEnabled, advanceReminder);
-      toast({
-        title: "Notificações desativadas",
-        description: "Você não receberá mais lembretes de tarefas.",
-      });
-    }
-  };
-
-  // Salvar configurações no localStorage
-  const saveSettings = (
-    notifications: boolean,
-    sound: boolean,
-    advance: number
-  ) => {
-    const settings = {
-      notificationsEnabled: notifications,
-      soundEnabled: sound,
-      advanceReminder: advance,
-    };
-    
-    try {
-      localStorage.setItem("taskNotificationSettings", JSON.stringify(settings));
-      console.log("Configurações salvas:", settings);
-    } catch (error) {
-      console.error("Erro ao salvar configurações:", error);
-    }
-  };
-
-  // Carregar configurações ao abrir o componente
-  useEffect(() => {
-    if (!open) return;
-    
-    try {
-      const savedSettings = localStorage.getItem("taskNotificationSettings");
-      if (savedSettings) {
-        const settings = JSON.parse(savedSettings);
-        setNotificationsEnabled(settings.notificationsEnabled ?? false);
-        setSoundEnabled(settings.soundEnabled ?? true);
-        setAdvanceReminder(settings.advanceReminder ?? 15);
-      }
-      
-      // Verificar a permissão atual
-      checkNotificationPermission();
-    } catch (error) {
-      console.error("Erro ao carregar configurações:", error);
-    }
-  }, [open]);
-
-  // Mostrar notificação de teste
-  const showTestNotification = () => {
-    // Verificar se notificações são suportadas pelo navegador
-    const notificationsSupported = typeof window !== 'undefined' && "Notification" in window;
-    
-    if (!notificationsSupported) {
-      // Se não suportar notificações nativas, usar apenas toast
-      toast({
-        title: "Teste de notificação",
-        description: "Seu navegador não suporta notificações nativas. Usando toast como alternativa.",
-        duration: 4000,
-      });
-      return;
-    }
-    
-    // Se suportar mas não tiver permissão, informar ao usuário
-    if (Notification.permission !== "granted") {
-      toast({
-        title: "Permissão negada",
-        description: "Você precisa permitir notificações primeiro.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    try {
-      // Mostrar um toast (funcionará em qualquer dispositivo)
-      toast({
-        title: "Notificação de teste",
-        description: "Esta é uma notificação de teste.",
-        duration: 4000,
-      });
-      
-      // Atrasar a notificação do sistema para evitar problemas
-      setTimeout(() => {
-        try {
-          // Mostrar uma notificação do sistema
-          new Notification("Notificação de teste", {
-            body: "Esta é uma notificação de teste para lembretes de tarefas.",
-            icon: "/notification-icon.svg",
-          });
-        } catch (innerError) {
-          console.error("Erro ao criar notificação:", innerError);
-        }
-        
-        // Tocar som se estiver habilitado, com um pequeno atraso
-        if (soundEnabled) {
-          setTimeout(() => {
-            const audio = new Audio("/notification-sound.mp3");
-            audio.play().catch((error) => {
-              console.error("Erro ao reproduzir som:", error);
-            });
-          }, 200);
-        }
-      }, 500);
-    } catch (error) {
-      console.error("Erro ao mostrar notificação de teste:", error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível mostrar a notificação de teste.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Atualizar as configurações quando os valores mudarem
-  useEffect(() => {
-    // Não salvar durante a inicialização ou quando o diálogo está fechado
-    if (!open) return;
-    
-    const currentStatus = checkNotificationPermission();
-    if (currentStatus === "denied" && notificationsEnabled) {
-      // Se permissão negada mas notificações habilitadas, desabilitar
-      setNotificationsEnabled(false);
-      return;
-    }
-    
-    saveSettings(notificationsEnabled, soundEnabled, advanceReminder);
-  }, [notificationsEnabled, soundEnabled, advanceReminder, open]);
-
-  // Função para testar o som de notificação
-  const testNotificationSound = () => {
-    try {
-      // Usando new Audio, carregando e reproduzindo
-      try {
-        const audio = new Audio('/notification-sound.mp3');
-        audio.volume = 1.0; // Volume máximo para teste
-        audio.play()
-          .then(() => {
-            console.log("Som reproduzido com sucesso");
-            toast({
-              title: "Som de notificação",
-              description: "Som reproduzido com sucesso",
-              duration: 3000,
-            });
-          })
-          .catch(error => {
-            console.error("Erro ao reproduzir som (método 1):", error);
-            // Tentar método alternativo
-            fallbackAudioPlay();
-          });
-      } catch (error) {
-        console.error("Erro ao usar Audio API (método 1):", error);
-        // Tentar método alternativo
-        fallbackAudioPlay();
-      }
-    } catch (error) {
-      console.error("Erro ao criar objeto de áudio:", error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível reproduzir o som. Verifique o volume.",
-        variant: "destructive",
-        duration: 3000,
-      });
-    }
-  };
-
-  // Método alternativo usando elemento HTML
-  const fallbackAudioPlay = () => {
-    try {
-      // Criar elemento de áudio e adicionar à página
-      const audioElement = document.createElement('audio');
-      audioElement.src = '/notification-sound.mp3';
-      audioElement.volume = 1.0;
-      
-      // Definir eventos
-      audioElement.onplay = () => console.log("Reprodução iniciada (método 2)");
-      audioElement.onerror = (e) => console.error("Erro ao reproduzir (método 2):", e);
-      
-      // Adicionar ao DOM temporariamente
-      document.body.appendChild(audioElement);
-      
-      // Reproduzir e depois remover
-      audioElement.play()
-        .then(() => {
-          console.log("Som reproduzido com método alternativo");
-          toast({
-            title: "Som de notificação",
-            description: "Som reproduzido com sucesso (método alternativo)",
-            duration: 3000,
-          });
-        })
-        .catch(error => {
-          console.error("Erro ao reproduzir som (método 2):", error);
-          toast({
-            title: "Erro",
-            description: "Não foi possível reproduzir o som usando métodos alternativos.",
-            variant: "destructive",
-            duration: 3000,
-          });
-        })
-        .finally(() => {
-          // Remover o elemento após uso
-          setTimeout(() => {
-            document.body.removeChild(audioElement);
-          }, 2000);
+        updateSettings({ notificationsEnabled: true });
+      } else {
+        toast({
+          title: "Permissão negada",
+          description: "Você negou a permissão para notificações.",
+          variant: "destructive"
         });
-    } catch (error) {
-      console.error("Erro no método alternativo:", error);
-    }
-  };
-
-  // Testar notificação
-  const testNotification = async () => {
-    setTestingNotification(true);
-    
-    try {
-      let notificationTitle = "Teste de Notificação";
-      let notificationBody = "Esta é uma notificação de teste.";
-      
-      // Verificar permissões nativas para navegadores desktop
-      if (!isIOS && "Notification" in window) {
-        if (Notification.permission !== "granted" && Notification.permission !== "denied") {
-          const permission = await Notification.requestPermission();
-          if (permission === "granted") {
-            setPermissionStatus("granted");
-          } else {
-            setPermissionStatus(permission);
-            toast({
-              title: "Permissão não concedida",
-              description: "As notificações podem não funcionar corretamente.",
-              variant: "destructive",
-            });
-          }
-        }
-        
-        // Mostrar notificação nativa se tiver permissão
-        if (Notification.permission === "granted") {
-          try {
-            new Notification(notificationTitle, {
-              body: notificationBody,
-              icon: "/pwa-icon-192.png",
-            });
-          } catch (error) {
-            console.error("Erro ao exibir notificação nativa:", error);
-          }
-        }
+        updateSettings({ notificationsEnabled: false });
       }
-      
-      // Mostrar toast para todos os casos (fallback)
-      toast({
-        title: notificationTitle,
-        description: notificationBody,
-        duration: 5000,
-      });
-      
-      // Tocar som se estiver habilitado
-      if (soundEnabled) {
-        testNotificationSound();
-      }
-      
     } catch (error) {
-      console.error("Erro ao testar notificação:", error);
+      console.error("Erro ao solicitar permissão:", error);
       toast({
         title: "Erro",
-        description: "Não foi possível testar a notificação",
-        variant: "destructive",
+        description: "Não foi possível solicitar permissão.",
+        variant: "destructive"
       });
-    } finally {
-      setTestingNotification(false);
     }
-  };
-
+  }, [toast, updateSettings]);
+  
+  // Testar uma notificação - memoizar para evitar re-renders
+  const testNotification = useCallback(() => {
+    showNotification("Notificação de teste", "Esta é uma notificação de teste.");
+  }, [showNotification]);
+  
+  // Salvar as configurações - memoizar para evitar re-renders
+  const onSubmit = useCallback((data: any) => {
+    updateSettings({
+      notificationsEnabled: data.notificationsEnabled,
+      soundEnabled: data.soundEnabled,
+      advanceReminder: data.advanceReminder
+    });
+    
+    toast({
+      title: "Configurações salvas",
+      description: "Suas preferências de notificação foram atualizadas."
+    });
+    
+    setOpen(false);
+  }, [updateSettings, toast]);
+  
+  // Ao abrir o diálogo, garantir que o formulário tenha valores atualizados
+  const handleOpenChange = useCallback((isOpen: boolean) => {
+    setOpen(isOpen);
+    if (isOpen) {
+      form.reset(settings);
+    }
+  }, [form, settings]);
+  
+  // Renderizar componente
+  const settingsIcon = (
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      width="24" 
+      height="24" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+      className="h-[1.2rem] w-[1.2rem]"
+    >
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+      <circle cx="12" cy="12" r="3"></circle>
+    </svg>
+  );
+  
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="icon">
+          {settingsIcon}
+          <span className="sr-only">Configurações</span>
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Settings className="h-5 w-5" />
-            Configurações
-            {isPwa && (
-              <span className="text-xs bg-slate-900/20 text-slate-900 dark:text-slate-200 dark:bg-slate-900/40 px-2 py-0.5 rounded text-[10px] font-medium">
-                PWA
-              </span>
-            )}
-          </DialogTitle>
+          <DialogTitle>Configurações de Notificação</DialogTitle>
         </DialogHeader>
         
-        <div className="grid gap-4 py-4">
-          {isIOS && (
-            <div className="rounded-md bg-yellow-500/20 p-3 text-sm">
-              <div className="flex items-start gap-2">
-                <Info className="h-5 w-5 text-yellow-500 mt-0.5" />
-                <div>
-                  <p className="font-medium text-yellow-500">Nota para usuários de iOS</p>
-                  <p className="mt-1 text-yellow-500/90">
-                    As notificações em navegadores no iOS são limitadas. Usaremos notificações internas (toasts) como alternativa para garantir que você receba lembretes.
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <div className="space-y-4">
+              {/* Habilitar notificações */}
+              <FormField
+                control={form.control}
+                name="notificationsEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Notificações</FormLabel>
+                      <FormDescription>
+                        Receba lembretes para suas tarefas
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={(checked) => {
+                          if (checked && Notification.permission !== "granted") {
+                            requestPermission();
+                          } else {
+                            field.onChange(checked);
+                          }
+                        }}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              
+              {/* Som de notificação */}
+              <FormField
+                control={form.control}
+                name="soundEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Som</FormLabel>
+                      <FormDescription>
+                        Tocar som ao receber notificações
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              
+              {/* Tempo de antecedência */}
+              <FormField
+                control={form.control}
+                name="advanceReminder"
+                render={({ field }) => (
+                  <FormItem className="space-y-4 rounded-lg border p-4">
+                    <div>
+                      <FormLabel className="text-base">Lembrete com antecedência</FormLabel>
+                      <FormDescription>
+                        Receba lembretes antes do prazo da tarefa
+                      </FormDescription>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <FormControl>
+                        <Slider
+                          min={5}
+                          max={60}
+                          step={5}
+                          defaultValue={[field.value]}
+                          onValueChange={(vals) => field.onChange(vals[0])}
+                        />
+                      </FormControl>
+                      <span className="w-12 text-sm">{field.value} min</span>
+                    </div>
+                  </FormItem>
+                )}
+              />
+              
+              {/* Botão para testar notificação */}
+              <div className="rounded-lg border p-4">
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  onClick={testNotification}
+                  className="w-full"
+                >
+                  Testar Notificação
+                </Button>
+              </div>
+              
+              {/* Informações sobre PWA */}
+              {!isPwa && !isIOS && (
+                <div className="rounded-lg border p-4 bg-muted/50">
+                  <h4 className="font-medium mb-2">Dica:</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Para melhor experiência com notificações, instale este aplicativo como um app (PWA).
                   </p>
                 </div>
-              </div>
+              )}
+              
+              {/* Informações para iOS */}
+              {isIOS && (
+                <div className="rounded-lg border p-4 bg-muted/50">
+                  <h4 className="font-medium mb-2">Nota para iOS:</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Para receber notificações no iOS, adicione este site à tela inicial primeiro.
+                  </p>
+                </div>
+              )}
             </div>
-          )}
-          
-          {/* Configuração de Notificações */}
-          <div className="flex items-center justify-between">
-            <div className="flex flex-col space-y-1">
-              <Label
-                htmlFor="notifications"
-                className="flex items-center gap-2"
-              >
-                <Bell className="h-4 w-4" />
-                Notificações
-              </Label>
-              <span className="text-xs text-muted-foreground">
-                Receba lembretes antes do prazo
-              </span>
-            </div>
-            {permissionStatus === "denied" ? (
-              <Button variant="outline" onClick={requestNotificationPermission}>
-                Permitir Notificações
-              </Button>
-            ) : (
-              <Switch
-                id="notifications"
-                checked={notificationsEnabled}
-                onCheckedChange={handleNotificationToggle}
-              />
-            )}
-          </div>
-          
-          {/* Configuração de Som */}
-          <div className="mb-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Volume2 className="h-4 w-4" />
-                <Label htmlFor="soundEnabled">Som de Notificação</Label>
-              </div>
-              <Switch
-                id="soundEnabled"
-                checked={soundEnabled}
-                onCheckedChange={setSoundEnabled}
-              />
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {isIOS
-                ? "Dispositivos iOS podem não reproduzir sons automaticamente. Você pode testar abaixo."
-                : "Reproduz um som quando uma notificação é exibida."}
-            </p>
             
-            {/* Botão para testar o som */}
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={testNotificationSound}
-              disabled={!soundEnabled}
-              className="mt-2"
-            >
-              <Volume2 className="h-4 w-4 mr-2" />
-              Testar Som
-            </Button>
-          </div>
-          
-          {/* Configuração de Tempo de Antecedência */}
-          <div className="flex flex-col space-y-2">
-            <Label htmlFor="advanceTime">
-              Tempo de antecedência (minutos)
-            </Label>
-            <Input
-              id="advanceTime"
-              type="number"
-              min="1"
-              max="60"
-              value={advanceReminder}
-              onChange={(e) => setAdvanceReminder(Number(e.target.value))}
-              disabled={!notificationsEnabled}
-            />
-            <span className="text-xs text-muted-foreground">
-              Quanto tempo antes do prazo você deseja ser lembrado
-            </span>
-          </div>
-        </div>
+            <Button type="submit" className="w-full">Salvar Configurações</Button>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );
-} 
+}
+
+// Memoizar o componente para evitar re-renderizações desnecessárias
+export const SettingsDialog = memo(SettingsDialogComponent); 

@@ -1,0 +1,155 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+
+    --radius: 0.5rem;
+  }
+
+  .light {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+
+    --card: 0 0% 98%;
+    --card-foreground: 240 10% 3.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+
+    --primary: 255 70% 65%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+
+    --accent: 196 80% 40%;
+    --accent-foreground: 240 5.9% 10%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 255 70% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-overflow-scrolling: touch;
+    background-color: black;
+  }
+}
+
+/* Fix para iOS */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Garantir que a aplicação ocupe toda a tela em dispositivos móveis */
+@media (max-width: 767px) {
+  .min-h-screen {
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+  }
+}
+
+@layer components {
+  .cyber-box {
+    @apply relative bg-card/90 rounded-lg border border-border
+           p-4;
+  }
+
+  .cyber-input {
+    @apply bg-background border border-border rounded
+           focus:border-primary focus:ring-1 focus:ring-primary/50
+           placeholder:text-muted-foreground;
+  }
+
+  .cyber-btn {
+    @apply relative inline-flex items-center justify-center px-4 py-2 
+           overflow-hidden text-sm font-medium bg-primary text-primary-foreground
+           border border-primary/50 rounded transition-all duration-300
+           hover:bg-primary/80 hover:border-primary
+           focus:outline-none focus:ring-2 focus:ring-primary/50
+           active:translate-y-0.5 active:shadow-none;
+  }
+  
+  .cyber-btn-blue {
+    @apply bg-accent border-accent/50
+           hover:bg-accent/80 hover:border-accent 
+           focus:ring-accent/50;
+  }
+  
+  .cyber-btn-green {
+    @apply bg-green-500 border-green-500/50
+           hover:bg-green-500/80 hover:border-green-500 
+           focus:ring-green-500/50;
+  }
+  
+  .cyber-btn-pink {
+    @apply bg-pink-500 border-pink-500/50
+           hover:bg-pink-500/80 hover:border-pink-500 
+           focus:ring-pink-500/50;
+  }
+  
+  .glass-panel {
+    @apply bg-background/50 backdrop-blur-sm rounded border border-border/30;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hidden {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+}

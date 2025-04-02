@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teste de Som</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 500px;
+      margin: 0 auto;
+      padding: 20px;
+      text-align: center;
+    }
+    button {
+      background-color: #0f172a;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 10px;
+    }
+    button:hover {
+      background-color: #1e293b;
+    }
+    .container {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Teste de Som</h1>
+  <p>Esta página permite testar a reprodução de som do navegador.</p>
+  
+  <div class="container">
+    <button id="playButton">Tocar Som</button>
+    <button id="playFallbackButton">Tocar Som (método alternativo)</button>
+  </div>
+  
+  <div id="log" style="margin-top: 20px; text-align: left; background: #f1f1f1; padding: 10px; border-radius: 4px;">
+    <p>Log de eventos:</p>
+  </div>
+
+  <script>
+    function addLog(message) {
+      const logDiv = document.getElementById('log');
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString();
+      logDiv.innerHTML += `<div>${timeStr}: ${message}</div>`;
+    }
+
+    // Método 1: usando API Audio padrão
+    document.getElementById('playButton').addEventListener('click', function() {
+      addLog('Iniciando reprodução com método Audio...');
+      
+      try {
+        const audio = new Audio('notification-sound.mp3');
+        audio.volume = 1.0;
+        
+        audio.oncanplaythrough = function() {
+          addLog('Áudio carregado, pronto para reproduzir');
+        };
+        
+        audio.onplay = function() {
+          addLog('Áudio iniciou reprodução');
+        };
+        
+        audio.onended = function() {
+          addLog('Áudio terminou de tocar');
+        };
+        
+        audio.onerror = function(e) {
+          addLog('Erro ao reproduzir: ' + e.type);
+        };
+        
+        const playPromise = audio.play();
+        
+        if (playPromise !== undefined) {
+          playPromise
+            .then(function() {
+              addLog('Promise de reprodução resolvida com sucesso');
+            })
+            .catch(function(error) {
+              addLog('Erro na promise de reprodução: ' + error.message);
+            });
+        } else {
+          addLog('Play não retornou uma Promise');
+        }
+      } catch (error) {
+        addLog('Exceção ao tentar reproduzir: ' + error.message);
+      }
+    });
+
+    // Método 2: usando elemento HTML áudio
+    document.getElementById('playFallbackButton').addEventListener('click', function() {
+      addLog('Iniciando reprodução com método alternativo...');
+      
+      try {
+        const audioElement = document.createElement('audio');
+        audioElement.src = 'notification-sound.mp3';
+        audioElement.volume = 1.0;
+        
+        audioElement.oncanplaythrough = function() {
+          addLog('Elemento áudio carregado');
+        };
+        
+        audioElement.onplay = function() {
+          addLog('Elemento áudio iniciou reprodução');
+        };
+        
+        audioElement.onended = function() {
+          addLog('Elemento áudio terminou de tocar');
+          try {
+            document.body.removeChild(audioElement);
+            addLog('Elemento removido do DOM');
+          } catch (e) {
+            addLog('Erro ao remover elemento: ' + e.message);
+          }
+        };
+        
+        audioElement.onerror = function(e) {
+          addLog('Erro no elemento áudio: ' + e.type);
+        };
+        
+        document.body.appendChild(audioElement);
+        addLog('Elemento áudio adicionado ao DOM');
+        
+        const playPromise = audioElement.play();
+        
+        if (playPromise !== undefined) {
+          playPromise
+            .then(function() {
+              addLog('Promise do elemento resolvida com sucesso');
+            })
+            .catch(function(error) {
+              addLog('Erro na promise do elemento: ' + error.message);
+            });
+        } else {
+          addLog('Play do elemento não retornou uma Promise');
+        }
+      } catch (error) {
+        addLog('Exceção no método alternativo: ' + error.message);
+      }
+    });
+  </script>
+</body>
+</html> 
